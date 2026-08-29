@@ -12,7 +12,7 @@ st.set_page_config(page_title="OMR 자동 채점 (박스 지정형)", layout="wi
 if 'boxes' not in st.session_state:
     st.session_state.boxes = []
 
-st.title("📝 OMR 자동 채점 프로그램 v9 (수학 단답형 완벽 지원)")
+st.title("📝 OMR 자동 채점 프로그램 v11 (수학 단답형 오답 직관성 강화)")
 
 tab1, tab2 = st.tabs(["🛠️ 1단계: OMR 영역 설정 (설정 저장/불러오기)", "🚀 2단계: 실전 채점 (Grading)"])
 
@@ -270,9 +270,9 @@ with tab2:
                             if len(marked_indices) == 1:
                                 student_answers[q_num] = marked_indices[0] + 1
                             elif len(marked_indices) > 1:
-                                student_answers[q_num] = -1 # 복수 기입
+                                student_answers[q_num] = -1 
                             else:
-                                student_answers[q_num] = 0 # 미기입
+                                student_answers[q_num] = 0 
                                 
                             grid[r_idx][0]['_row_ratios'] = row_ratios
                             
@@ -281,16 +281,14 @@ with tab2:
                         col_marks = []
                         is_multiple = False
                         
-                        for c_idx in range(3): # 100s, 10s, 1s
+                        for c_idx in range(3):
                             col_ratios = []
-                            for r_idx in range(10): # 0~9
+                            for r_idx in range(10):
                                 cell = grid[r_idx][c_idx]
                                 roi = thresh[cell['inner'][1]:cell['inner'][3], cell['inner'][0]:cell['inner'][2]]
                                 black_pixels = cv2.countNonZero(roi)
                                 area = (cell['inner'][2] - cell['inner'][0]) * (cell['inner'][3] - cell['inner'][1])
                                 col_ratios.append((black_pixels / area) * 100)
-                                
-                                # 시각화용 비율 저장
                                 cell['_ratio'] = col_ratios[-1]
                                 
                             marked_indices = [i for i, val in enumerate(col_ratios) if val > threshold_val]
@@ -301,15 +299,13 @@ with tab2:
                                 is_multiple = True
                                 col_marks.append(-1)
                             else:
-                                col_marks.append(-2) # 공란
+                                col_marks.append(-2)
                                 
                         if is_multiple:
-                            student_answers[q_num] = -1 # 복수 기입 에러
+                            student_answers[q_num] = -1 
                         elif all(m == -2 for m in col_marks):
-                            student_answers[q_num] = -2 # 완전 미기입
+                            student_answers[q_num] = -2 
                         else:
-                            # 빈칸(-2)은 0으로 취급하여 계산 (예: [공란, 5, 공란] -> 0*100 + 5*10 + 0 = 50)
-                            # 단, 맨 앞자리가 공란이어도 그대로 0으로 계산됨 (예: [공란, 공란, 5] -> 5)
                             h = col_marks[0] if col_marks[0] != -2 else 0
                             t = col_marks[1] if col_marks[1] != -2 else 0
                             u = col_marks[2] if col_marks[2] != -2 else 0
@@ -349,14 +345,13 @@ with tab2:
                                     cell = grid[r_idx][s_ans - 1]
                                     cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), color, 3)
                                 elif s_ans == 0:
-                                    for c_idx in range(b['cols']):
-                                        cell = grid[r_idx][c_idx]
-                                        cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (255, 0, 0), 1)
+                                    cell = grid[r_idx][0]
+                                    cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 0, 255), 3)
                                 elif s_ans == -1:
                                     for c_idx, ratio in enumerate(ratios):
                                         if ratio > threshold_val:
                                             cell = grid[r_idx][c_idx]
-                                            cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 165, 255), 3)
+                                            cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 0, 255), 3)
 
                     elif b['type'] == '수학 단답형 (1문항)':
                         q_num = b['start_q']
@@ -364,22 +359,27 @@ with tab2:
                             s_ans = student_answers[q_num]
                             is_correct = (s_ans == answer_key.get(q_num, {}).get('answer', -1))
                             
-                            if s_ans == -2: # 완전 미기입
-                                for c_idx in range(b['cols']):
-                                    for r_idx in range(b['rows']):
-                                        cell = grid[r_idx][c_idx]
-                                        cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (255, 0, 0), 1)
-                            else:
-                                color = (0, 255, 0) if is_correct else (0, 0, 255)
+                            if is_correct:
                                 for c_idx in range(b['cols']):
                                     for r_idx in range(b['rows']):
                                         cell = grid[r_idx][c_idx]
                                         ratio = cell.get('_ratio', 0)
                                         if ratio > threshold_val:
-                                            if s_ans == -1: # 복수 기입 발생
-                                                cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 165, 255), 3)
-                                            else:
-                                                cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), color, 3)
+                                            cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 255, 0), 3)
+                            else:
+                                # 오답일 경우 (단순 오답, 복수 기입, 완전 미기입 포함) 모두 최상단 0 위치에 빨간 박스 표시
+                                for c_idx in range(b['cols']):
+                                    cell = grid[0][c_idx]
+                                    cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 0, 255), 3)
+                                    
+                                # 미기입이 아닌 경우, 학생이 마킹한 오답 위치에도 추가로 빨간 박스 표시하여 어디를 틀렸는지 확인
+                                if s_ans != -2:
+                                    for c_idx in range(b['cols']):
+                                        for r_idx in range(b['rows']):
+                                            cell = grid[r_idx][c_idx]
+                                            ratio = cell.get('_ratio', 0)
+                                            if ratio > threshold_val:
+                                                cv2.rectangle(img, (cell['outer'][0], cell['outer'][1]), (cell['outer'][2], cell['outer'][3]), (0, 0, 255), 3)
 
                 all_results.append({
                     "학생 정보": student_info,
@@ -405,6 +405,6 @@ with tab2:
             st.download_button(
                 label="📊 학생별 최종 점수 다운로드 (.xlsx)",
                 data=excel_buffer.getvalue(),
-                file_name="OMR_최종_성적표_수학.xlsx",
+                file_name="OMR_최종_성적표_V11.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
